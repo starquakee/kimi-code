@@ -334,6 +334,14 @@ export class FullCompaction {
         this.agent.log.error('failed to refresh system prompt after compaction', { error });
       }
       await this.agent.injection.injectAfterCompaction();
+      // The reinjected reminders (loadable-tools manifest, goal) are part of
+      // the post-compaction floor: every compaction strips and re-appends
+      // them, so a baseline captured before this point would leave them
+      // outside the "nothing new since compaction" guard — with a large
+      // manifest checkAutoCompaction would re-trigger against a shape that
+      // cannot shrink. Raise the guard to the true floor before deferred
+      // input replays (markCompleted), so only genuinely new content counts.
+      this.lastCompactedTokenCount = this.tokenCountWithPending;
       this.markCompleted();
       const { contextSummary: _contextSummary, ...eventResult } = result;
       void _contextSummary;
@@ -634,6 +642,9 @@ export class FullCompaction {
       // double-count on both the live and the restore path). A baseline
       // below the actual post-compaction floor would let checkAutoCompaction
       // re-trigger even though the compacted shape cannot shrink further.
+      // compactionWorker raises it once more after injectAfterCompaction so
+      // the reinjected reminders join the floor too; this earlier capture
+      // stays as the fallback when reinjection throws.
       this.lastCompactedTokenCount = this.tokenCountWithPending;
       return result;
     } catch (error) {

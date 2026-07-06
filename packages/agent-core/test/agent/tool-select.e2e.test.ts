@@ -484,14 +484,17 @@ describe('disclosure mode — compaction', () => {
     expect(ctx.agent.tools.loopTools.map((t) => t.name)).toContain(GRAFANA_TOOL);
 
     // The "nothing new since compaction" guard must be baselined on the
-    // counter that includes the rebuild message — result.tokensAfter predates
-    // it, and a lower baseline would let auto-compaction re-trigger against a
-    // floor that cannot shrink.
+    // true post-compaction floor: summary + rebuild message + the reinjected
+    // announcement. result.tokensAfter predates all of it, and a baseline
+    // that misses any re-appended piece would let auto-compaction re-trigger
+    // against a floor that cannot shrink (each round strips and re-appends
+    // the same reminders).
     const internals = ctx.agent.fullCompaction as unknown as {
       lastCompactedTokenCount: number | null;
     };
+    const reAnnouncement = ctx.agent.context.history.filter(isLoadableToolsAnnouncement).at(-1)!;
     expect(internals.lastCompactedTokenCount).toBe(
-      tokensAfter + estimateTokensForMessage(rebuilt[0]!),
+      tokensAfter + estimateTokensForMessage(rebuilt[0]!) + estimateTokensForMessage(reAnnouncement),
     );
 
     // The baseline lives strictly within one turn: runOneTurn re-arms it at
